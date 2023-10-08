@@ -5,13 +5,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "WiFi.h"
+#include "WiFiCredentials.h"
 
 TaskHandle_t playerTaskHandle = NULL;
 
 LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
- 
-const char *ssid = "Bartolo";
-const char *password = "remolacha";
+
 const char *urls[] = {
   "https://radio01.ferozo.com/proxy/ra01000659?mp=/;",
   "https://sa.mp3.icecast.magma.edge-access.net/sc_rad39",
@@ -30,9 +29,7 @@ const char *titles[] = {
   "Futurock"
 };
 
-//URLStreamBuffered urlStream(ssid, password);
 URLStreamBuffered urlStream(512);
-//AudioSourceURL source(urlStream, urls, "audio/mp3");
 MetaDataOutput out1;
 AnalogAudioStream dac;
 EncodedAudioStream out2dec(&dac, new MP3DecoderHelix()); // Decoding stream
@@ -155,9 +152,9 @@ void Player_task(void *arg) {
 
 void wifi_setup() {
   Serial.print("Conectando a ");
-  Serial.println(ssid);
-  lcd_text("Conectando...", ssid);
-  WiFi.begin(ssid, password);
+  Serial.println(SSID);
+  lcd_text("Conectando...", SSID);
+  WiFi.begin(SSID, PASSWORD);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
