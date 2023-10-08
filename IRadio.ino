@@ -1,36 +1,37 @@
 #include "Arduino.h"
 #include "AudioTools.h"
 #include "AudioCodecs/CodecMP3Helix.h"
-#include <LiquidCrystal_I2C.h>
+#include "LiquidCrystal_I2C.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "WiFi.h"
 
 TaskHandle_t playerTaskHandle = NULL;
 
 LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
-
-
  
 const char *ssid = "Bartolo";
 const char *password = "remolacha";
 const char *urls[] = {
   "https://radio01.ferozo.com/proxy/ra01000659?mp=/;",
   "https://sa.mp3.icecast.magma.edge-access.net/sc_rad39",
+  "http://relay.relatores.com.ar/radio.mp3",
   "http://stream.srg-ssr.ch/m/rr/mp3_128",
-  "http://sunshineradio.ice.infomaniak.ch/sunshineradio-128.mp3",
-  "http://streaming.swisstxt.ch/m/drsvirus/mp3_128"
+  "http://streaming.swisstxt.ch/m/drsvirus/mp3_128",
+  "http://us-b5-p-e-kj2-audio.cdn.mdstrm.com/live-audio/5942a3a05fa68cca2efb4264/5d9d019112cbbb45d6a50960/chunks.m3u8"
 };
 
 const char *titles[] = {
   "FM La Tribu",
   "Nacional Rock",
+  "Relatores",
   "Internacional 1",
   "Internacional 2",
-  "Internacional 3"
+  "Futurock"
 };
 
 //URLStreamBuffered urlStream(ssid, password);
-URLStreamBuffered urlStream(ssid, password, 1024);
+URLStreamBuffered urlStream(512);
 //AudioSourceURL source(urlStream, urls, "audio/mp3");
 MetaDataOutput out1;
 AnalogAudioStream dac;
@@ -40,7 +41,11 @@ StreamCopy copier(out, urlStream); // copy url to decoder
 
  
 int station_index = 0;
+int station_current = 0;
 int station_count = sizeof(urls) / sizeof(urls[0]);
+const int station_delay = 3000;
+unsigned long current_time = 0;
+const char *last_name = "";
 
 //Parameters
 const int clkPin  = 34;
@@ -81,7 +86,14 @@ void readRotary() {
     station_index = rotVal;
     Serial.println(urls[station_index]);
     Serial.println(titles[station_index]);
-    lcd_text(titles[station_index], NULL);
+    if (station_index == station_current) {
+      lcd_text(titles[station_index], last_name);
+    }
+    else {
+      lcd_text(titles[station_index], NULL);
+    }
+
+    current_time = millis();
   }
   clkLast = clkState;
 
@@ -103,29 +115,51 @@ void printMetaData(MetaDataType type, const char* str, int len) {
   Serial.print(": ");
   Serial.println(str);
   if (type == 4) {
-    lcd_text(titles[station_index], str);
+    last_name = str;
+    lcd_text(titles[station_current], last_name);
   }
   
 }
 
 void ChangeRadio() {
-  //copier.end();
   vTaskSuspend(playerTaskHandle);
   urlStream.end();
-  urlStream.begin(urls[station_index], "audio/mp3");
+  current_time = millis();
+  station_current = station_index;
+  urlStream.begin(urls[station_current], "audio/mp3");
+  out2dec.setNotifyAudioChange(dac);
   out1.end();
   out1.setCallback(printMetaData);
   out1.begin(urlStream.httpRequest());
-  //player.setAudioSource(source);
-  //copier.begin();
+
   vTaskResume(playerTaskHandle);
 
 }
 
 void Player_task(void *arg) {
-  while(1){
-    copier.copy();
+  while(1) {
+    if (copier.available()) {
+      copier.copy();
+    }
   }
+}
+
+void wifi_setup() {
+  Serial.print("Conectando a ");
+  Serial.println(ssid);
+  lcd_text("Conectando...", ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  // Print local IP address and start web server
+  Serial.println("");
+  Serial.println("WiFi conectado.");
+  Serial.println("IP: ");
+  Serial.println(WiFi.localIP());
+  lcd_text("WiFi OK", WiFi.localIP().toString().c_str());
+  delay(500);
 }
 
 void setup() {
@@ -137,10 +171,11 @@ void setup() {
   //Serial
   Serial.begin(115200);
   AudioLogger::instance().begin(Serial, AudioLogger::Warning);
-
-
   lcd.init();                      // initialize the lcd
   lcd.backlight();
+
+  wifi_setup();
+  
 
   // setup multi output
   out.add(out1);
@@ -150,10 +185,7 @@ void setup() {
     // setup metadata
   out1.setCallback(printMetaData);
   out1.begin(urlStream.httpRequest());
-  // setup player
-  //urlStream.setMetadataCallback(callbackPrintMetaData);
-// mp3 radio
-  //urlStream.begin();
+
 
 
   // setup output
@@ -175,8 +207,17 @@ void setup() {
 
 
 void loop() {
-  while(1) {
-    readRotary();
+  readRotary();
+  waitAndShowCurrent();
+}
+
+void waitAndShowCurrent() {
+  if (millis() > current_time + station_delay) {
+    if (station_index != station_current) {
+      station_index = station_current;
+      rotVal = station_index;
+      lcd_text(titles[station_current], last_name);
+    }
   }
 }
  
