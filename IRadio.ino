@@ -6,6 +6,7 @@
 #include "freertos/task.h"
 #include "WiFi.h"
 #include "WiFiCredentials.h"
+#include "WiFiManager.h" // https://github.com/tzapu/WiFiManager
 
 TaskHandle_t playerTaskHandle = NULL;
 
@@ -151,10 +152,10 @@ void Player_task(void *arg) {
 }
 
 void wifi_setup() {
-  Serial.print("Conectando a ");
-  Serial.println(SSID);
-  lcd_text("Conectando...", SSID);
-  WiFi.begin(SSID, PASSWORD);
+  //Serial.print("Conectando a ");
+  //Serial.println(SSID);
+  //lcd_text("Conectando...", SSID);
+  //WiFi.begin(SSID, PASSWORD);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
@@ -176,9 +177,30 @@ void setup() {
 
   //Serial
   Serial.begin(115200);
-  AudioLogger::instance().begin(Serial, AudioLogger::Warning);
   lcd.init();                      // initialize the lcd
   lcd.backlight();
+
+  WiFiManager wm;
+  //wm.resetSettings(); // wipe settings
+  lcd_text("IRadio-config", "Config Wifi");
+  bool res;
+  // res = wm.autoConnect(); // auto generated AP name from chipid
+  // res = wm.autoConnect("AutoConnectAP"); // anonymous ap
+  res = wm.autoConnect("IRadio-config"); // password protected ap
+
+  if(!res) {
+      Serial.println("Failed to connect");
+      lcd_text("Config Wifi", "Fallo");
+      // ESP.restart();
+  }
+  else {
+      //if you get here you have connected to the WiFi
+      Serial.println("connected...yeey :)");
+
+  }
+
+  AudioLogger::instance().begin(Serial, AudioLogger::Warning);
+
 
   wifi_setup();
   server.begin();
